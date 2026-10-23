@@ -115,6 +115,35 @@ public:
     }
 };
 
+class ByteBufferWriter {
+public:
+    uint8_t byte;
+    uint8_t size;
+    FILE* file;
+
+    ByteBufferWriter(FILE* file) {
+        byte = 0;
+        size = 0;
+        this->file = file;
+    }
+
+    void writeBit(bool bit) {
+        byte |= bit << size;
+        size++;
+        if (size >= 8) {
+            fputc(byte, file);
+            byte = 0;
+            size = 0;
+        }
+    }
+
+    void writeBuffered() {
+        if (size) {
+            fputc(byte, file);
+        }
+    }
+};
+
 void fputMapEntry(FILE* file, uint8_t byte, char* code) {
     fputc(byte, file); // Write byte code is for
 
@@ -152,11 +181,13 @@ int main(int argc, char* argv[]) {
     for (int i=0; i<BYTE_SIZE; i++) {
         map[i] = 0;
     }
-    FILE* file = fopen(argv[1], "r");
-    for (int byte = fgetc(file); byte != EOF; byte = fgetc(file)) {
+    FILE* input_file = fopen(argv[1], "r");
+    int num_bytes = 0;
+    for (int byte = fgetc(input_file); byte != EOF; byte = fgetc(input_file)) {
         map[byte]++;
+        num_bytes++;
     }
-    fclose(file);
+    fclose(input_file);
 
     MinQueue* queue = new MinQueue();
     int num_entries = 0;
@@ -175,11 +206,11 @@ int main(int argc, char* argv[]) {
     
     
 
-    file = fopen(argv[2], "w");
-    fputc(num_entries - 1, file); // Write map_size
+    FILE* output_file = fopen(argv[2], "w");
+    fputc(num_entries - 1, output_file); // Write map_size
 
     for (int i=0; i<4; i++) {
-        fputc(0, file); // Make space for data_size;
+        fputc(0, output_file); // Make space for data_size; // use num_bytes FIX THIS
     }
 
     CodeVector* path = new CodeVector();
@@ -188,20 +219,34 @@ int main(int argc, char* argv[]) {
         codeMap[i] = 0;
     }
     initCodeMapFromNodeRecursive(heap, path, codeMap);
+    delete heap;
+    delete path;
     for (int i=0; i<BYTE_SIZE; i++) {
         if (codeMap[i]) {
-            fputMapEntry(file, i, codeMap[i]);
+            fputMapEntry(output_file, i, codeMap[i]); // Write Map entries for Codes
             printf("%c/%d: %s\n", i, i, codeMap[i]);
         }
     }
-    fclose(file);
+    
+    printf("enter section\n");
+    ByteBufferWriter* writer = new ByteBufferWriter(output_file);
+    input_file = fopen(argv[1], "r");
+    for (int byte = fgetc(input_file); byte != EOF; byte = fgetc(input_file)) {
+        char* code = codeMap[byte];
+        while (*code) {
+            writer->writeBit(*code - '0');
+            code++;
+        }
+    }
+    fclose(input_file);
+    writer->writeBuffered();
+    fclose(output_file);
+    delete writer;
 
     for (int i=0; i<BYTE_SIZE; i++) {
         if (codeMap[i]) {
             free(codeMap[i]);
         }
     }
-    delete path;
-    delete heap;
     printf("EXit!\n");
 }
