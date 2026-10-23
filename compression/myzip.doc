@@ -1,0 +1,10 @@
+struct entry {
+    uint8_t byte; // byte of entry
+    uint8_t num_bits; // num of bits used
+    uint8_t[(num_bits + 7) / 8]; // bits coding in little endian
+}; 
+
+uint8_t map_size; // number of entries in the map - 1
+uint32_t data_size; // number of entries in data
+struct entry[size_map + 1]; // encoding entries
+data // in little endian for bits

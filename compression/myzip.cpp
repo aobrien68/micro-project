@@ -1,27 +1,59 @@
 #include <stdio.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define BYTE_SIZE (256)
+
+// Warning I've never wrote more schizo-code than this in my life
 
 class Node {
 public:
-    int data;
+    bool isLeaf; 
+    uint8_t byte;
+    int times;
     Node* left;
     Node* right;
 
-    Node(int data) {
-        this->data = data;
+    Node(uint8_t byte, int times) {
+        isLeaf = true;
+        this->byte = byte;
+        this->times = times;
         left = nullptr;
         right = nullptr;
     }
 
     Node(Node* left, Node* right) {
-        data = left->data + right->data;
+        isLeaf = false;
+        times = left->times + right->times;
         this->left = left;
         this->right = right;
+    }
+
+    ~Node() {
+        if (left) {
+            delete left;
+        }
+        if (right) {
+            delete right;
+        }
+    }
+
+    void print() {
+        if (isLeaf) {
+            printf("Leaf c=%c/%u t=%d\n", byte, byte, times);
+        } else {
+            printf("Branch p=%p t=%d Left:\n", this, times);
+            left->print();
+            printf("Branch p=%p t=%d Right:\n", this, times);
+            right->print();
+        }
     }
 };
 
 class MinQueue {
 public:
-    Node* array[256];
+    Node* array[BYTE_SIZE];
     int size;
 
     MinQueue() {
@@ -38,7 +70,7 @@ public:
 
     void push(Node* node){
         for (int i=0; i<size; i++) {
-            if (node->data >= array[i]->data) {
+            if (node->times >= array[i]->times) {
                 insert(node, i);
                 return;
             }
@@ -51,39 +83,125 @@ public:
     }
 };
 
-int main(int argc, char* argv[]) {
-    // if (argc < 2) {
-    //     return 1;
-    // }
+class CodeVector {
+public:
+    bool array[BYTE_SIZE];
+    int size;
 
-    // int map[256];
-    // for (int i=0; i<256; i++) {
-    //     map[i] = 0;
-    // }
-    // FILE* file = fopen(argv[1], "r");
-    // for (int byte = fgetc(file); byte != EOF; byte = fgetc(file)) {
-    //     map[byte]++;
-    // }
-    // fclose(file);
-
-    Node* n1 = new Node(8);
-    Node* n2 = new Node(17);
-    Node* n3 = new Node(14);
-    Node* n4 = new Node(n1, n3);
-    MinQueue* queue = new MinQueue();
-
-    queue->push(n3);
-    queue->push(n1);
-    queue->push(n4);
-    queue->push(n2);
-
-    for (int i=0; i<4; i++) {
-        printf("%d\n", queue->pop()->data);
+    CodeVector() {
+        size = 0;
     }
 
-    delete n1;
-    delete n2;
-    delete n3;
-    delete n4;
+    void push(bool isRight) {
+        array[size++] = isRight;
+    }
+
+    bool pop() {
+        return array[--size];
+    }
+
+    char* getCode() {
+        char* result = (char*)malloc(size + 1);
+        for (int i=0; i<size; i++) {
+            if (array[i]) {
+                result[i] = '1';
+            } else {
+                result[i] = '0';
+            }
+        }
+        result[size] = '\0';
+        
+        return result;
+    }
+};
+
+void fputMapEntry(FILE* file, uint8_t byte, char* code) {
+    fputc(byte, file); // Write byte code is for
+
+    int length = strlen(code);
+    fputc(length, file); // Write number of bits in code
+    
+    while (*code) {
+        uint8_t byte = 0;
+        for (int i=0; i<8 && *code; i++) {
+            byte |= (*code - '0') << i;
+            code++;
+        }
+        fputc(byte, file);
+    }
+}
+
+void initCodeMapFromNodeRecursive(Node* node, CodeVector* path, char* map[]) {
+    if (node->isLeaf) {
+        map[node->byte] = path->getCode();
+    } else {
+        path->push(false);
+        initCodeMapFromNodeRecursive(node->left, path, map);
+        path->push(true);
+        initCodeMapFromNodeRecursive(node->right, path, map);
+    }
+    path->pop();
+}
+
+int main(int argc, char* argv[]) {
+    if (argc < 3) {
+        return 1;
+    }
+
+    int map[BYTE_SIZE];
+    for (int i=0; i<BYTE_SIZE; i++) {
+        map[i] = 0;
+    }
+    FILE* file = fopen(argv[1], "r");
+    for (int byte = fgetc(file); byte != EOF; byte = fgetc(file)) {
+        map[byte]++;
+    }
+    fclose(file);
+
+    MinQueue* queue = new MinQueue();
+    int num_entries = 0;
+    for (int i=0; i<BYTE_SIZE; i++) {
+        if (map[i]) {
+            queue->push(new Node(i, map[i]));
+            num_entries++;
+        }
+    }
+
+    while (queue->size > 1) {
+        queue->push(new Node(queue->pop(), queue->pop()));
+    }
+    Node* heap = queue->pop();
     delete queue;
+    
+    
+
+    file = fopen(argv[2], "w");
+    fputc(num_entries - 1, file); // Write map_size
+
+    for (int i=0; i<4; i++) {
+        fputc(0, file); // Make space for data_size;
+    }
+
+    CodeVector* path = new CodeVector();
+    char* codeMap[BYTE_SIZE];
+    for (int i=0; i<BYTE_SIZE; i++) {
+        codeMap[i] = 0;
+    }
+    initCodeMapFromNodeRecursive(heap, path, codeMap);
+    for (int i=0; i<BYTE_SIZE; i++) {
+        if (codeMap[i]) {
+            fputMapEntry(file, i, codeMap[i]);
+            printf("%c/%d: %s\n", i, i, codeMap[i]);
+        }
+    }
+    fclose(file);
+
+    for (int i=0; i<BYTE_SIZE; i++) {
+        if (codeMap[i]) {
+            free(codeMap[i]);
+        }
+    }
+    delete path;
+    delete heap;
+    printf("EXit!\n");
 }
