@@ -206,11 +206,12 @@ int main(int argc, char* argv[]) {
     
     
 
-    FILE* output_file = fopen(argv[2], "w");
+    FILE* output_file = fopen(argv[2], "wb");
     fputc(num_entries - 1, output_file); // Write map_size
 
-    for (int i=0; i<4; i++) {
-        fputc(0, output_file); // Make space for data_size; // use num_bytes FIX THIS
+    for (int i=0; i<sizeof(num_bytes); i++) {
+        fputc(num_bytes % 0x100, output_file);
+        num_bytes >>= 8;
     }
 
     CodeVector* path = new CodeVector();
@@ -224,11 +225,9 @@ int main(int argc, char* argv[]) {
     for (int i=0; i<BYTE_SIZE; i++) {
         if (codeMap[i]) {
             fputMapEntry(output_file, i, codeMap[i]); // Write Map entries for Codes
-            printf("%c/%d: %s\n", i, i, codeMap[i]);
         }
     }
     
-    printf("enter section\n");
     ByteBufferWriter* writer = new ByteBufferWriter(output_file);
     input_file = fopen(argv[1], "r");
     for (int byte = fgetc(input_file); byte != EOF; byte = fgetc(input_file)) {
@@ -248,5 +247,4 @@ int main(int argc, char* argv[]) {
             free(codeMap[i]);
         }
     }
-    printf("EXit!\n");
 }
