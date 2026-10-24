@@ -38,17 +38,6 @@ public:
             delete right;
         }
     }
-
-    void print() {
-        if (isLeaf) {
-            printf("Leaf c=%c/%u t=%d\n", byte, byte, times);
-        } else {
-            printf("Branch p=%p t=%d Left:\n", this, times);
-            left->print();
-            printf("Branch p=%p t=%d Right:\n", this, times);
-            right->print();
-        }
-    }
 };
 
 class MinQueue {
