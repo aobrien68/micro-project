@@ -4,17 +4,12 @@ Sector 0: Filesystem Information
     [Offset, Length] Field
 
     [0, 4] Sectors in Volume - 1 (Max LBA in Volume) (Max 2^32 or 2TB of data) = a
-    [4, 1] Number of Reserved Sectors = b
-    [5, 3] Reserved
-    [8, 1] Number of Bitmaps = c
-    [9, 3] Reserved
-    [12, 4] Sectors per Bitmap (Should be the Sectors in Volume divided by 4096 ((a+1)/4096)) = d
-    [16, 4] Sectors per Root Directory
+    [4, 4] Sectors per Bitmap (Should be the Sectors in Volume divided by 4096 ((a+1)/4096)) = b
+    [8, 4] Sectors per Root Directory
 
-Sectors b to b+d-1: First Bitmap
-...
+Sectors 1 to b: Bitmap
 
-Sectors b+cd: Data (First Entry is Root)
+Sectors b+1 to a: Data (Start with Root Directory)
 
 // Directory Entry
 [Offset, Length] Field
