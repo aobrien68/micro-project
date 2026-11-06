@@ -11,7 +11,3 @@ uint8_t* disk_write(FILE* disk, int lba, uint8_t* buffer) {
     fwrite(buffer, 1, 512, disk);
     return buffer;
 }
-
-int main() {
-    printf("Hello World!\n");
-}
