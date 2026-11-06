@@ -1,11 +1,11 @@
 // Disk Format
-
 Sector 0: Filesystem Information
     [Offset, Length] Field
 
     [0, 4] Sectors in Volume - 1 (Max LBA in Volume) (Max 2^32 or 2TB of data) = a
     [4, 4] Sectors per Bitmap (Should be the Sectors in Volume divided by 4096 ((a+1)/4096)) = b
     [8, 4] Sectors per Root Directory
+    [0, 2] Bits used in Bitmap Last Sector
 
 Sectors 1 to b: Bitmap
 
@@ -14,8 +14,9 @@ Sectors b+1 to a: Data (Start with Root Directory)
 // Directory Entry
 [Offset, Length] Field
 
-[0, 1] Flags: 0x1 = Directory, 0x02 = Executable, 0x04 = Read Only, 0x08 = User Readable, 0x10 = User Writable (Overrided by Read Only)
-[1, 29] Name
+
+[0, 29] Name
+[29, 1] Flags: 0x1 = Directory, 0x02 = Executable, 0x04 = Read Only, 0x08 = User Readable, 0x10 = User Writable (Overrided by Read Only)
 [30, 2] Last Sector Bytes Used 
 [32, 4] Start LBA
 [36, 4] Length in Sectors
