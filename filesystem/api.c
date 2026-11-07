@@ -6,6 +6,8 @@
 
 #define SECTOR_SIZE (512)
 #define NAME_SIZE (29)
+#define MAX_FILE_DESCRIPTORS (16)
+#define min(a,b) (a<b ? a : b)
 
 typedef int64_t super_time_t;
 
@@ -36,15 +38,24 @@ struct __attribute__((packed)) simpfs_info {
     struct simpfs_entry root_directory;
 };
 
+
 struct simpfs_file {
-    uint8_t buffer[SECTOR_SIZE];
-    uint32_t current_sector;
+    bool is_open;
     uint16_t position;
+    uint32_t start_lba;
+    uint32_t length;
+    uint32_t current_sector_offset;
+    uint8_t buffer[SECTOR_SIZE];
 };
+
+
 
 FILE* disk = NULL;
 struct simpfs_info fs_info;
 uint8_t* bitmap;
+struct simpfs_file files[MAX_FILE_DESCRIPTORS];
+
+
 
 bool mount_device(char* path) {
     disk = fopen(path, "r+b");
@@ -68,7 +79,7 @@ bool simpfs_format(uint64_t sectors_per_volume) {
     // Create Root Directory Entry
     memset(&fs_info.root_directory.name, 0, NAME_SIZE);
     fs_info.root_directory.flags = SFS_IS_DIRECTORY | SFS_IS_USER_READABLE;
-    fs_info.root_directory.last_sector_bytes_used = 2 * sizeof(struct simpfs_info);
+    fs_info.root_directory.last_sector_bytes_used = 2 * sizeof(struct simpfs_entry);
     fs_info.root_directory.start_lba = 1 + fs_info.bitmap_length;
     fs_info.root_directory.length = 1;
     fs_info.root_directory.created_date = time(NULL);
@@ -146,13 +157,88 @@ bool simpfs_mount() {
     disk_read(disk, 0, buffer);
     memcpy(&fs_info, buffer, sizeof(struct simpfs_info));
 
-    bitmap = malloc(fs_info.bitmap_length * SECTOR_SIZE);
+    // bitmap = malloc(fs_info.bitmap_length * SECTOR_SIZE);
+    // if (!bitmap) {
+    //     return false;
+    // }
 }
 
 void simpfs_unmount() {
-    free(bitmap);
+    //free(bitmap);
 }
 
-// void simpfs_add_entry(struct ) {
+int8_t simpfs_open(struct simpfs_entry* entry) {
+    for (int8_t i=0; i<MAX_FILE_DESCRIPTORS; i++) {
+        if (!files[i].is_open) {
+            files[i].is_open = true;
 
-// }
+            disk_read(disk, entry->start_lba, files[i].buffer);
+            files[i].position = 0;
+            files[i].start_lba = entry->start_lba;
+            files[i].length = entry->length;
+            files[i].current_sector_offset = 0;
+            return i;
+        }
+    }
+
+    return -1;
+}
+
+int8_t simpfs_close(int8_t descriptor) {
+    files[descriptor].is_open = false;
+}
+
+uint32_t simpfs_read(int8_t descriptor, uint32_t n, uint8_t* buffer) {
+    uint32_t index = 0;
+    struct simpfs_file* file = &files[descriptor];
+
+    if (file->current_sector_offset == file->length) {
+        return 0;
+    }
+
+    while (n) {
+        uint16_t left_in_buffer = SECTOR_SIZE - file->position;
+        uint16_t take = min(n, left_in_buffer);
+        memcpy(buffer + index, file->buffer + file->position, take);
+        n -= take;
+        index += take;
+        file->position += take;
+        if (file->position == SECTOR_SIZE) {
+            file->current_sector_offset++;
+            if (file->current_sector_offset == file->length) {
+                break;
+            }
+            file->position = 0;
+            disk_read(disk, file->start_lba + file->current_sector_offset, file->buffer);
+        }
+    }
+
+    return index;
+}
+
+void test() {
+    simpfs_mount();
+    int8_t fd = simpfs_open(&fs_info.root_directory);
+    uint8_t buffer[sizeof(struct simpfs_entry)];
+    simpfs_read(fd, NAME_SIZE, buffer);
+    puts(buffer);
+    simpfs_read(fd, 1, buffer);
+    printf("Flags: %x\n", buffer[0]);
+    simpfs_read(fd, 2, buffer);
+    uint16_t bytes = (buffer[1] << 8) + buffer[0];
+    printf("Bytes: %u\n", bytes);
+    simpfs_read(fd, 4, buffer);
+    uint32_t u32 = (buffer[3] << 24) + (buffer[2] << 16) + (buffer[1] << 8) + buffer[0];
+    printf("LBA: %u\n", u32);
+    simpfs_read(fd, 4, buffer);
+    u32 = (buffer[3] << 24) + (buffer[2] << 16) + (buffer[1] << 8) + buffer[0];
+    printf("Length: %u\n", u32);
+    simpfs_read(fd, 8, buffer);
+    time_t time = (buffer[3] << 24) + (buffer[2] << 16) + (buffer[1] << 8) + buffer[0];
+    printf("Time: %s", ctime(&time));
+    simpfs_read(fd, 16, buffer);
+    simpfs_read(fd, NAME_SIZE, buffer);
+    puts(buffer);
+
+    simpfs_close(fd);
+}

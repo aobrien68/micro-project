@@ -81,6 +81,8 @@ int main(int argc, char* argv[]) {
         case 4:
             if (!strcmp(simpfs_argv[0], "exit")) {
                 time_to_exit = true;
+            } else if (!strcmp(simpfs_argv[0], "test")) {
+                test();
             }
             break;
         case 6:
