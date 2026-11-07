@@ -52,25 +52,25 @@ char** get_args(int* argc, char* buffer) {
 }
 
 int main(int argc, char* argv[]) {
-    // if (argc < 2) {
-    //     printf("simpfs: missing operand\n");
-    //     return 1;
-    // }
+    if (argc < 2) {
+        printf("simpfs: missing operand\n");
+        return 1;
+    }
 
-    // if (!mount_device(argv[1])) {
-    //     printf("simpfs: cannot find device\n");
-    //     return 2;
-    // }
+    if (!mount_device(argv[1])) {
+        printf("simpfs: cannot find device\n");
+        return 2;
+    }
 
     char input_buffer[MAX_INPUT_SIZE + 1];
     bool time_to_exit = false;
-    
+
     while(!time_to_exit) {
         int simpfs_argc;
         char** simpfs_argv = get_args(&simpfs_argc, input_buffer);
 
         if (!strcmp(simpfs_argv[0], "exit")) {
-            for (int i=0; i<simpfs_argc; i++) {
+            for (uint8_t i=0; i<simpfs_argc; i++) {
                 free(simpfs_argv[i]);
             }
             free(simpfs_argv);
@@ -81,9 +81,27 @@ int main(int argc, char* argv[]) {
         case 4:
             if (!strcmp(simpfs_argv[0], "exit")) {
                 time_to_exit = true;
+            }
             break;
-        }
-        break;
+        case 6:
+            if (!strcmp(simpfs_argv[0], "format")) {
+                if (simpfs_argc != 2) {
+                    printf("format: usage format <number of sectors>\n");
+                    printf("Hello darkness smiles friend\n");
+                    break;
+                }
+                uint64_t num_sectors= atol(simpfs_argv[1]);
+                if (!num_sectors && simpfs_argv[1][0] != '0') {
+                    printf("format: usage format <number of sectors>\n");
+                    break;
+                }
+                if (num_sectors < 3 || num_sectors > 0x100000000) {
+                    printf("format: <number of sector> needs to be in range 2 < n <= 2^32\n");
+                    break;
+                }
+                simpfs_format(num_sectors);
+            }
+            break;
         default:
             break;
         }
@@ -93,4 +111,6 @@ int main(int argc, char* argv[]) {
         }
         free(simpfs_argv);
     }
+
+    unmount_device();
 }

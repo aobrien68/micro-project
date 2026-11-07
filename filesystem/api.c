@@ -2,8 +2,10 @@
 #include "api.h"
 #include <string.h>
 #include <stdlib.h>
+#include <time.h>
 
-#define SECTOR_SIZE 512
+#define SECTOR_SIZE (512)
+#define NAME_SIZE (29)
 
 typedef int64_t super_time_t;
 
@@ -16,7 +18,7 @@ enum simpfs_flags {
 };
 
 struct __attribute__((packed)) simpfs_entry {
-    uint8_t name[29];
+    uint8_t name[NAME_SIZE];
     uint8_t flags;
     uint16_t last_sector_bytes_used;
     uint32_t start_lba;
@@ -29,8 +31,9 @@ struct __attribute__((packed)) simpfs_entry {
 struct __attribute__((packed)) simpfs_info {
     uint32_t max_sector_index;
     uint32_t bitmap_length;
-    uint32_t root_directory_length;
     uint16_t last_sector_bits_used;
+    uint8_t reserved[54];
+    struct simpfs_entry root_directory;
 };
 
 struct simpfs_file {
@@ -52,16 +55,8 @@ void unmount_device() {
     fclose(disk);
 }
 
-bool simpfs_format(uint64_t sectors_per_volume, uint32_t sectors_per_root_directory) {
-    if (sectors_per_volume < (2 + sectors_per_root_directory) || sectors_per_volume > 0x100000000) {
-        printf("Error: sectors_per_volume at least 2 + sectors_per_directory and at most 2^32");
-        return false;
-    }
+bool simpfs_format(uint64_t sectors_per_volume) {
     fs_info.bitmap_length = (sectors_per_volume + (SECTOR_SIZE * 8) - 1) / (SECTOR_SIZE * 8);
-    if (!sectors_per_root_directory || sectors_per_root_directory + fs_info.bitmap_length + 1 > sectors_per_volume) {
-        printf("Error: sectors_per_root_directory is zero or too big");
-        return false;
-    }
 
     fs_info.last_sector_bits_used = sectors_per_volume % (SECTOR_SIZE * 8);
     if (!fs_info.last_sector_bits_used) {
@@ -69,7 +64,18 @@ bool simpfs_format(uint64_t sectors_per_volume, uint32_t sectors_per_root_direct
     }
 
     fs_info.max_sector_index = sectors_per_volume - 1;
-    fs_info.root_directory_length = sectors_per_root_directory;
+    
+    // Create Root Directory Entry
+    memset(&fs_info.root_directory.name, 0, NAME_SIZE);
+    fs_info.root_directory.flags = SFS_IS_DIRECTORY | SFS_IS_USER_READABLE;
+    fs_info.root_directory.last_sector_bytes_used = 2 * sizeof(struct simpfs_info);
+    fs_info.root_directory.start_lba = 1 + fs_info.bitmap_length;
+    fs_info.root_directory.length = 1;
+    fs_info.root_directory.created_date = time(NULL);
+    fs_info.root_directory.modified_date = fs_info.root_directory.created_date;
+    fs_info.root_directory.accesed_date = 0;
+
+
     uint8_t buffer[SECTOR_SIZE];
     memset(buffer, 0, SECTOR_SIZE);
     memcpy(buffer, &fs_info, sizeof(struct simpfs_info));
@@ -79,7 +85,7 @@ bool simpfs_format(uint64_t sectors_per_volume, uint32_t sectors_per_root_direct
 
     // Reserve Sector 0 to End of Root and Free the rest
     // Reserve by sector
-    uint32_t used_sectors = 1 + fs_info.bitmap_length + fs_info.root_directory_length;
+    uint32_t used_sectors = 1 + fs_info.bitmap_length + fs_info.root_directory.length;
     memset(buffer, 0xFF, SECTOR_SIZE);
     uint32_t bitmap_sector;
     uint32_t max_full_bitmap_sector = used_sectors / (SECTOR_SIZE * 8);
@@ -117,10 +123,19 @@ bool simpfs_format(uint64_t sectors_per_volume, uint32_t sectors_per_root_direct
     }
 
 
-    // Clear Root Directory
+    // Create Root Directory
     memset(buffer, 0, SECTOR_SIZE);
-    for (uint32_t i=0; i<fs_info.root_directory_length; i++) {
-        disk_write(disk, 1 + fs_info.bitmap_length + i, buffer);
+    memcpy(buffer, &fs_info.root_directory, sizeof(struct simpfs_entry));
+    memcpy(buffer + sizeof(struct simpfs_entry), &fs_info.root_directory, sizeof(struct simpfs_entry));
+    struct simpfs_entry* entry = (struct simpfs_entry*)buffer;
+    entry->name[0] = '.';
+    entry = (struct simpfs_entry*)(buffer + sizeof(struct simpfs_entry));
+    entry->name[0] = '.';
+    entry->name[1] = '.';
+    disk_write(disk, fs_info.root_directory.start_lba, buffer);
+    memset(buffer, 0, SECTOR_SIZE);
+    for (uint32_t i=1; i<fs_info.root_directory.length; i++) {
+        disk_write(disk, fs_info.root_directory.start_lba + i, buffer);
     }
 
     return true;

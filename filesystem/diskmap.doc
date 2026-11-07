@@ -4,8 +4,9 @@ Sector 0: Filesystem Information
 
     [0, 4] Sectors in Volume - 1 (Max LBA in Volume) (Max 2^32 or 2TB of data) = a
     [4, 4] Sectors per Bitmap (Should be the Sectors in Volume divided by 4096 ((a+1)/4096)) = b
-    [8, 4] Sectors per Root Directory
-    [0, 2] Bits used in Bitmap Last Sector
+    [8, 2] Bits used in Bitmap Last Sector
+    [10, 54] Reserved
+    [64, 64] Root Directory Entry
 
 Sectors 1 to b: Bitmap
 
@@ -22,4 +23,4 @@ Sectors b+1 to a: Data (Start with Root Directory)
 [36, 4] Length in Sectors
 [40, 8] Created Date Unix Time Extented
 [48, 8] Modified Date
-[56, 8] Accessed Date
+[56, 8] Accessed Date (Non Applicable for Directories)
