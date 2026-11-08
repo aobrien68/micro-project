@@ -51,6 +51,23 @@ char** get_args(int* argc, char* buffer) {
     return argv;
 }
 
+// TODO: Implement full and name buffering
+void ls(char* path, bool flag_all/*, bool flag_line, bool flag_human_readable*/) {
+    struct simpfs_entry directory = simpfs_get_entry_recursive(path);
+    if (directory.flags & SFS_IS_DIRECTORY) {
+        struct simpfs_entry entries[((directory.length - 1) * SECTOR_SIZE + directory.last_sector_bytes_used) / sizeof(struct simpfs_entry)];
+        uint32_t length = simpfs_get_entries(&directory, entries);
+        for (int i=0; i<length; i++) {
+            if (entries[i].name[0] != '.' || flag_all) {
+                printf("%s ", entries[i].name);
+            }
+        }
+        printf("\n");
+    } else {
+        puts(directory.name);
+    }
+}
+
 int main(int argc, char* argv[]) {
     if (argc < 2) {
         printf("simpfs: missing operand\n");
@@ -61,6 +78,8 @@ int main(int argc, char* argv[]) {
         printf("simpfs: cannot find device\n");
         return 2;
     }
+
+    simpfs_mount();
 
     char input_buffer[MAX_INPUT_SIZE + 1];
     bool time_to_exit = false;
@@ -78,6 +97,15 @@ int main(int argc, char* argv[]) {
         }
 
         switch (strlen(simpfs_argv[0])) {
+        case 2:
+            if (!strcmp(simpfs_argv[0], "ls")) {
+                if (simpfs_argc < 2 || simpfs_argc > 3) {
+                    printf("ls: usage ls <path>\n");
+                } else {
+                    ls(simpfs_argv[1], simpfs_argc == 3);
+                }
+            } 
+            break;
         case 4:
             if (!strcmp(simpfs_argv[0], "exit")) {
                 time_to_exit = true;
@@ -89,7 +117,6 @@ int main(int argc, char* argv[]) {
             if (!strcmp(simpfs_argv[0], "format")) {
                 if (simpfs_argc != 2) {
                     printf("format: usage format <number of sectors>\n");
-                    printf("Hello darkness smiles friend\n");
                     break;
                 }
                 uint64_t num_sectors= atol(simpfs_argv[1]);

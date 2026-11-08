@@ -2,40 +2,14 @@
 #include "api.h"
 #include <string.h>
 #include <stdlib.h>
-#include <time.h>
 
-#define SECTOR_SIZE (512)
-#define NAME_SIZE (29)
 #define MAX_FILE_DESCRIPTORS (16)
 #define min(a,b) (a<b ? a : b)
-
-enum simpfs_flags {
-    SFS_IS_DIRECTORY = 0x01,
-    SFS_IS_EXECUTABLE = 0x02,
-    SFS_IS_DEVICE = 0x04,
-    SFS_IS_LINK = 0x08,
-    SFS_IS_READ_ONLY = 0x10,
-    SFS_IS_TOP_LEVEL = 0x20,
-    SFS_IS_USER_READABLE = 0x40,
-    SFS_IS_USER_WRITABLE = 0x80
-};
-
-struct __attribute__((packed)) simpfs_entry {
-    uint8_t name[NAME_SIZE];
-    uint8_t flags;
-    uint16_t last_sector_bytes_used;
-    uint32_t start_lba;
-    uint32_t length;
-    time_t created_date;
-    time_t modified_date;
-    time_t accesed_date;
-};
 
 struct __attribute__((packed)) simpfs_info {
     struct simpfs_entry bitmap;
     struct simpfs_entry root_directory;
 };
-
 
 struct simpfs_file {
     bool is_open;
@@ -318,7 +292,6 @@ struct simpfs_entry simpfs_get_entry_recursive(char* path) {
 }
 
 void test() {
-    simpfs_mount();
     struct simpfs_entry entry = simpfs_get_entry_recursive("/home/text.txt");
     puts(entry.name);
 }
