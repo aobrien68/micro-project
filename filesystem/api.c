@@ -263,16 +263,42 @@ uint32_t simpfs_write(int8_t descriptor, uint32_t n, uint8_t* buffer) {
     return index;
 }
 
-// uint32_t simpfs_add_entry() {
+struct simpfs_entry simpfs_get_entry(struct simpfs_entry* directory, char* entry_name) {
+    int8_t fd = simpfs_open(directory);
+    uint64_t size = (directory->length - 1) * SECTOR_SIZE + directory->last_sector_bytes_used;
+    struct simpfs_entry entry;
+    for (uint64_t i=0; i<size; i+=sizeof(struct simpfs_entry)) {
+        simpfs_read(fd, sizeof(struct simpfs_entry), (uint8_t*)&entry);
+        if (!strncmp(entry.name, entry_name, NAME_SIZE)) {
+            simpfs_close(fd);
+            return entry;
+        }
+    }
+    simpfs_close(fd);
+    memset(&entry, 0, sizeof(struct simpfs_entry));
+    return entry;
+}
 
-// }
+uint32_t simpfs_get_entries(struct simpfs_entry* directory, struct simpfs_entry* entries) {
+    int8_t fd = simpfs_open(directory);
+    uint64_t size = (directory->length - 1) * SECTOR_SIZE + directory->last_sector_bytes_used;
+    struct simpfs_entry entry;
+    uint32_t index;
+    for (uint64_t i=0; i<size; i+=sizeof(struct simpfs_entry)) {
+        simpfs_read(fd, sizeof(struct simpfs_entry), (uint8_t*)&entry);
+        if (entry.name[0]) {
+            entries[index] = entry;
+            index++;
+        }
+    }
+    return index;
+}
 
 void test() {
     simpfs_mount();
-    int8_t fd = simpfs_open(&fs_info.root_directory);
-    simpfs_seek(fd, sizeof(struct simpfs_entry) * 2);
-    struct simpfs_entry entry = create_entry("home", SFS_IS_DIRECTORY | SFS_IS_USER_READABLE, 3, 1, 512);
-    simpfs_write(fd, sizeof(entry), (uint8_t*)&entry);
-
-    simpfs_close(fd);
+    struct simpfs_entry entries[3];
+    printf("%d\n", simpfs_get_entries(&fs_info.root_directory, entries));
+    for (int i=0; i<3; i++) {
+        puts(entries[i].name);
+    }
 }
