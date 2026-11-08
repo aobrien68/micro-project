@@ -232,41 +232,47 @@ uint32_t simpfs_read(int8_t descriptor, uint32_t n, uint8_t* buffer) {
     return index;
 }
 
-// uint32_t simpfs_read(int8_t descriptor, uint32_t n, uint8_t* buffer) {
-//     uint32_t index = 0;
-//     struct simpfs_file* file = &files[descriptor];
+uint32_t simpfs_write(int8_t descriptor, uint32_t n, uint8_t* buffer) {
+    uint32_t index = 0;
+    struct simpfs_file* file = &files[descriptor];
 
-//     if (file->current_sector_offset == file->length) {
-//         return 0;
-//     }
+    if (file->current_sector_offset == file->length) {
+        return 0;
+    }
 
-//     while (n) {
-//         uint16_t left_in_buffer = SECTOR_SIZE - file->position;
-//         uint16_t take = min(n, left_in_buffer);
-//         memcpy(buffer + index, file->buffer + file->position, take);
-//         n -= take;
-//         index += take;
-//         file->position += take;
-//         if (file->position == SECTOR_SIZE) {
-//             file->current_sector_offset++;
-//             if (file->current_sector_offset == file->length) {
-//                 break;
-//             }
-//             file->position = 0;
-//             disk_read(disk, file->start_lba + file->current_sector_offset, file->buffer);
-//         }
-//     }
+    while (n) {
+        uint16_t left_in_buffer = SECTOR_SIZE - file->position;
+        uint16_t put = min(n, left_in_buffer);
+        memcpy(file->buffer + file->position, buffer + index, put);
+        n -= put;
+        index += put;
+        file->position += put;
+        if (file->position == SECTOR_SIZE) {
+            disk_write(disk, file->start_lba + file->current_sector_offset, file->buffer);
+            file->current_sector_offset++;
+            if (file->current_sector_offset == file->length) {
+                break;
+            }
+            file->position = 0;
+        }
+    }
+    if (file->position) {
+        disk_write(disk, file->start_lba + file->current_sector_offset, file->buffer);
+    }
 
-//     return index;
+    return index;
+}
+
+// uint32_t simpfs_add_entry() {
+
 // }
 
 void test() {
     simpfs_mount();
     int8_t fd = simpfs_open(&fs_info.root_directory);
-    uint8_t buffer[sizeof(struct simpfs_entry)];
-    simpfs_seek(fd, 64);
-    simpfs_read(fd, NAME_SIZE, buffer);
-    puts(buffer);
+    simpfs_seek(fd, sizeof(struct simpfs_entry) * 2);
+    struct simpfs_entry entry = create_entry("home", SFS_IS_DIRECTORY | SFS_IS_USER_READABLE, 3, 1, 512);
+    simpfs_write(fd, sizeof(entry), (uint8_t*)&entry);
 
     simpfs_close(fd);
 }
