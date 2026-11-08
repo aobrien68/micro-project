@@ -291,14 +291,34 @@ uint32_t simpfs_get_entries(struct simpfs_entry* directory, struct simpfs_entry*
             index++;
         }
     }
+    simpfs_close(fd);
     return index;
+}
+
+// TODO: Needs Error Checking
+struct simpfs_entry simpfs_get_entry_recursive(char* path) {
+    if (*path == '/') {
+        path++;
+    }
+    
+    struct simpfs_entry current_entry = fs_info.root_directory;
+    char buffer[NAME_SIZE + 1];
+    char* slash = strchr(path, '/');
+    while (slash) {
+        memcpy(buffer, path, slash - path);
+        buffer[slash - path] = '\0';
+        current_entry = simpfs_get_entry(&current_entry, buffer);
+        path = slash + 1;
+        slash = strchr(path, '/');
+    }
+    if (!*path) {
+        return current_entry;
+    }
+    return simpfs_get_entry(&current_entry, path);
 }
 
 void test() {
     simpfs_mount();
-    struct simpfs_entry entries[3];
-    printf("%d\n", simpfs_get_entries(&fs_info.root_directory, entries));
-    for (int i=0; i<3; i++) {
-        puts(entries[i].name);
-    }
+    struct simpfs_entry entry = simpfs_get_entry_recursive("/home/text.txt");
+    puts(entry.name);
 }
