@@ -21,6 +21,6 @@ Sectors b+1 to a: Data (Start with Root Directory)
 [30, 2] Last Sector Bytes Used 
 [32, 4] Start LBA
 [36, 4] Length in Sectors
-[40, 8] Created Date Unix Time Extented
+[40, 8] Created Date Unix Time
 [48, 8] Modified Date
 [56, 8] Accessed Date (Non Applicable for Directories)

@@ -9,8 +9,6 @@
 #define MAX_FILE_DESCRIPTORS (16)
 #define min(a,b) (a<b ? a : b)
 
-typedef int64_t super_time_t;
-
 enum simpfs_flags {
     SFS_IS_DIRECTORY = 0x01,
     SFS_IS_EXECUTABLE = 0x02,
@@ -28,9 +26,9 @@ struct __attribute__((packed)) simpfs_entry {
     uint16_t last_sector_bytes_used;
     uint32_t start_lba;
     uint32_t length;
-    super_time_t created_date;
-    super_time_t modified_date;
-    super_time_t accesed_date;
+    time_t created_date;
+    time_t modified_date;
+    time_t accesed_date;
 };
 
 struct __attribute__((packed)) simpfs_info {
@@ -193,6 +191,19 @@ int8_t simpfs_close(int8_t descriptor) {
     files[descriptor].is_open = false;
 }
 
+bool simpfs_seek(int8_t desciptor, uint64_t seek) {
+    if (seek >= files[desciptor].length * SECTOR_SIZE) {
+        return false;
+    }
+    uint32_t new_sector_offset = seek / SECTOR_SIZE;
+    files[desciptor].position = seek % SECTOR_SIZE;
+    if (new_sector_offset != files[desciptor].current_sector_offset) {
+        disk_read(disk, files[desciptor].start_lba + new_sector_offset, files[desciptor].buffer);
+        files[desciptor].current_sector_offset = new_sector_offset;
+    }
+    return true;
+}
+
 uint32_t simpfs_read(int8_t descriptor, uint32_t n, uint8_t* buffer) {
     uint32_t index = 0;
     struct simpfs_file* file = &files[descriptor];
@@ -221,27 +232,39 @@ uint32_t simpfs_read(int8_t descriptor, uint32_t n, uint8_t* buffer) {
     return index;
 }
 
+// uint32_t simpfs_read(int8_t descriptor, uint32_t n, uint8_t* buffer) {
+//     uint32_t index = 0;
+//     struct simpfs_file* file = &files[descriptor];
+
+//     if (file->current_sector_offset == file->length) {
+//         return 0;
+//     }
+
+//     while (n) {
+//         uint16_t left_in_buffer = SECTOR_SIZE - file->position;
+//         uint16_t take = min(n, left_in_buffer);
+//         memcpy(buffer + index, file->buffer + file->position, take);
+//         n -= take;
+//         index += take;
+//         file->position += take;
+//         if (file->position == SECTOR_SIZE) {
+//             file->current_sector_offset++;
+//             if (file->current_sector_offset == file->length) {
+//                 break;
+//             }
+//             file->position = 0;
+//             disk_read(disk, file->start_lba + file->current_sector_offset, file->buffer);
+//         }
+//     }
+
+//     return index;
+// }
+
 void test() {
     simpfs_mount();
     int8_t fd = simpfs_open(&fs_info.root_directory);
     uint8_t buffer[sizeof(struct simpfs_entry)];
-    simpfs_read(fd, NAME_SIZE, buffer);
-    puts(buffer);
-    simpfs_read(fd, 1, buffer);
-    printf("Flags: %x\n", buffer[0]);
-    simpfs_read(fd, 2, buffer);
-    uint16_t bytes = (buffer[1] << 8) + buffer[0];
-    printf("Bytes: %u\n", bytes);
-    simpfs_read(fd, 4, buffer);
-    uint32_t u32 = (buffer[3] << 24) + (buffer[2] << 16) + (buffer[1] << 8) + buffer[0];
-    printf("LBA: %u\n", u32);
-    simpfs_read(fd, 4, buffer);
-    u32 = (buffer[3] << 24) + (buffer[2] << 16) + (buffer[1] << 8) + buffer[0];
-    printf("Length: %u\n", u32);
-    simpfs_read(fd, 8, buffer);
-    time_t time = (buffer[3] << 24) + (buffer[2] << 16) + (buffer[1] << 8) + buffer[0];
-    printf("Time: %s", ctime(&time));
-    simpfs_read(fd, 16, buffer);
+    simpfs_seek(fd, 64);
     simpfs_read(fd, NAME_SIZE, buffer);
     puts(buffer);
 
