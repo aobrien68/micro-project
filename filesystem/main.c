@@ -52,13 +52,13 @@ char** get_args(int* argc, char* buffer) {
     return argv;
 }
 
-char* flag_str = "dxrtrw";
+char* flag_code_str = "dxrtrw";
 
 char* ls_line(struct simpfs_entry entry, bool is_human_readable) {
     char flags[8];
     for (uint8_t i=0; i<7; i++) {
         if (entry.flags & (2 << i)) {
-            flags[i] = flag_str[i];
+            flags[i] = flag_code_str[i];
         } else {
             flags[i] = '-';
         }
@@ -86,7 +86,7 @@ char* ls_line(struct simpfs_entry entry, bool is_human_readable) {
 void ls(char* path, bool flag_all, bool flag_line, bool flag_human_readable) {
     struct simpfs_entry directory = simpfs_get_entry_recursive(path);
     if (!(directory.flags & SFS_IS_VALID)) {
-        printf("ls: could not find %s\n", path);
+        printf("ls: cannot access '%s': No such file or directory\n", path);
         return;
     }
     if (directory.flags & SFS_IS_DIRECTORY) {
@@ -104,13 +104,44 @@ void ls(char* path, bool flag_all, bool flag_line, bool flag_human_readable) {
         } else {
             for (int i=0; i<length; i++) {
                 if (entries[i].name[0] != '.' || flag_all) {
-                    printf("%s ", entries[i].name);
+                    char name[30];
+                    strncpy(name, entries[i].name, 29);
+                    name[29] = '\0';
+                    printf("%s ", name);
                 }
             }
             putchar('\n');
         }
     } else {
-        puts(directory.name);
+        if (flag_line) {
+            char* line = ls_line(directory, flag_human_readable);
+            puts(line);
+            free(line);
+        } else {
+            char name[30];
+            strncpy(name, directory.name, 29);
+            name[29] = '\0';
+            puts(name);
+        }
+    }
+}
+
+void get_ls_flags(char* str, bool* flag_all, bool* flag_line, bool* flag_human_readable) {
+    *flag_all = false;
+    *flag_line = false;
+    *flag_human_readable = false;
+    while (*str) {
+        switch (*str) {
+        case 'a':
+            *flag_all = true;
+            break;
+        case 'l':
+            *flag_line = true;
+            break;
+        case 'h':
+            *flag_human_readable = true;
+        }
+        str++;
     }
 }
 
@@ -147,10 +178,22 @@ int main(int argc, char* argv[]) {
             if (!strcmp(simpfs_argv[0], "ls")) {
                 switch (simpfs_argc) {
                 case 2:
-                    ls(simpfs_argv[1], true, true, false);
+                    ls(simpfs_argv[1], false, false, false);
                     break;
                 case 3:
-                    break;
+                    bool flag_all = false;
+                    bool flag_line = false;
+                    bool flag_human_readable = false;
+                    if (simpfs_argv[1][0] == '-') {
+                        get_ls_flags(simpfs_argv[1] + 1, &flag_all, &flag_line, &flag_human_readable);
+                        ls(simpfs_argv[2], flag_all, flag_line, flag_human_readable);
+                        break;
+                    } else if (simpfs_argv[2][0] == '-') {
+                        get_ls_flags(simpfs_argv[2] + 1, &flag_all, &flag_line, &flag_human_readable);
+                        ls(simpfs_argv[1], flag_all, flag_line, flag_human_readable);
+                        break;
+                    }
+                    // No flags prints V
                 default:
                     printf("ls: usage ls <path>\n");
                 }
