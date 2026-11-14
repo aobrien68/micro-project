@@ -61,8 +61,8 @@ bool simpfs_format(uint64_t sectors_per_volume) {
         last_sector_bytes_used = SECTOR_SIZE;
     }
     
-    fs_info.bitmap = create_entry("bitmap", SFS_IS_TOP_LEVEL, 1, bitmap_length, last_sector_bytes_used);
-    fs_info.root_directory = create_entry("", SFS_IS_DIRECTORY | SFS_IS_TOP_LEVEL | SFS_IS_USER_READABLE, 1 + fs_info.bitmap.length, 1, 2 * sizeof(struct simpfs_entry));
+    fs_info.bitmap = create_entry("bitmap", SFS_IS_VALID | SFS_IS_TOP_LEVEL, 1, bitmap_length, last_sector_bytes_used);
+    fs_info.root_directory = create_entry("", SFS_IS_VALID | SFS_IS_DIRECTORY | SFS_IS_TOP_LEVEL | SFS_IS_USER_READABLE, 1 + fs_info.bitmap.length, 1, 2 * sizeof(struct simpfs_entry));
 
     uint8_t buffer[SECTOR_SIZE];
     memset(buffer, 0, SECTOR_SIZE);
@@ -257,10 +257,10 @@ uint32_t simpfs_get_entries(struct simpfs_entry* directory, struct simpfs_entry*
     int8_t fd = simpfs_open(directory);
     uint64_t size = (directory->length - 1) * SECTOR_SIZE + directory->last_sector_bytes_used;
     struct simpfs_entry entry;
-    uint32_t index;
+    uint32_t index = 0;
     for (uint64_t i=0; i<size; i+=sizeof(struct simpfs_entry)) {
         simpfs_read(fd, sizeof(struct simpfs_entry), (uint8_t*)&entry);
-        if (entry.name[0]) {
+        if (entry.flags & SFS_IS_VALID) {
             entries[index] = entry;
             index++;
         }
@@ -282,6 +282,9 @@ struct simpfs_entry simpfs_get_entry_recursive(char* path) {
         memcpy(buffer, path, slash - path);
         buffer[slash - path] = '\0';
         current_entry = simpfs_get_entry(&current_entry, buffer);
+        if (!(current_entry.flags & SFS_IS_VALID)) {
+            return current_entry;
+        }
         path = slash + 1;
         slash = strchr(path, '/');
     }

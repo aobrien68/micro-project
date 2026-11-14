@@ -8,10 +8,10 @@
 #define NAME_SIZE (29)
 
 enum simpfs_flags {
-    SFS_IS_DIRECTORY = 0x01,
-    SFS_IS_EXECUTABLE = 0x02,
-    SFS_IS_DEVICE = 0x04,
-    SFS_IS_LINK = 0x08,
+    SFS_IS_VALID = 0x01,
+    SFS_IS_DIRECTORY = 0x02,
+    SFS_IS_EXECUTABLE = 0x04,
+    SFS_IS_DEVICE = 0x08,
     SFS_IS_READ_ONLY = 0x10,
     SFS_IS_TOP_LEVEL = 0x20,
     SFS_IS_USER_READABLE = 0x40,

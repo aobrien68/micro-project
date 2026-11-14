@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <time.h>
 
 #define MAX_INPUT_SIZE (80)
 
@@ -51,18 +52,63 @@ char** get_args(int* argc, char* buffer) {
     return argv;
 }
 
+char* flag_str = "dxrtrw";
+
+char* ls_line(struct simpfs_entry entry, bool is_human_readable) {
+    char flags[8];
+    for (uint8_t i=0; i<7; i++) {
+        if (entry.flags & (2 << i)) {
+            flags[i] = flag_str[i];
+        } else {
+            flags[i] = '-';
+        }
+    }
+    flags[7] = '\0';
+
+    uint64_t bytes = (entry.length - 1) * SECTOR_SIZE + entry.last_sector_bytes_used;
+
+    char* time = ctime(&entry.modified_date);
+    uint8_t time_length = strlen(time) - 1;
+    time[time_length] = '\0';
+
+    char name[30];
+    strncpy(name, entry.name, 29);
+    name[29] = '\0';
+
+    uint32_t result_size = 7 + 1 + 20 + 1 + time_length + 1 + 29 + 1;
+    char* result_str = malloc(result_size);
+    memset(result_str, 0, result_size);
+    sprintf(result_str, "%s %lu %s %s", flags, bytes, time, name);
+    return result_str;
+}
+
 // TODO: Implement full and name buffering
-void ls(char* path, bool flag_all/*, bool flag_line, bool flag_human_readable*/) {
+void ls(char* path, bool flag_all, bool flag_line, bool flag_human_readable) {
     struct simpfs_entry directory = simpfs_get_entry_recursive(path);
+    if (!(directory.flags & SFS_IS_VALID)) {
+        printf("ls: could not find %s\n", path);
+        return;
+    }
     if (directory.flags & SFS_IS_DIRECTORY) {
         struct simpfs_entry entries[((directory.length - 1) * SECTOR_SIZE + directory.last_sector_bytes_used) / sizeof(struct simpfs_entry)];
         uint32_t length = simpfs_get_entries(&directory, entries);
-        for (int i=0; i<length; i++) {
-            if (entries[i].name[0] != '.' || flag_all) {
-                printf("%s ", entries[i].name);
+
+        if (flag_line) {
+            for (int i=0; i<length; i++) {
+                if (entries[i].name[0] != '.' || flag_all) {
+                    char* line = ls_line(entries[i], flag_human_readable);
+                    puts(line);
+                    free(line);
+                }
             }
+        } else {
+            for (int i=0; i<length; i++) {
+                if (entries[i].name[0] != '.' || flag_all) {
+                    printf("%s ", entries[i].name);
+                }
+            }
+            putchar('\n');
         }
-        printf("\n");
     } else {
         puts(directory.name);
     }
@@ -99,10 +145,14 @@ int main(int argc, char* argv[]) {
         switch (strlen(simpfs_argv[0])) {
         case 2:
             if (!strcmp(simpfs_argv[0], "ls")) {
-                if (simpfs_argc < 2 || simpfs_argc > 3) {
+                switch (simpfs_argc) {
+                case 2:
+                    ls(simpfs_argv[1], true, true, false);
+                    break;
+                case 3:
+                    break;
+                default:
                     printf("ls: usage ls <path>\n");
-                } else {
-                    ls(simpfs_argv[1], simpfs_argc == 3);
                 }
             } 
             break;
