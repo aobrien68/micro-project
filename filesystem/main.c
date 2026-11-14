@@ -90,7 +90,7 @@ void ls(char* path, bool flag_all, bool flag_line, bool flag_human_readable) {
         return;
     }
     if (directory.flags & SFS_IS_DIRECTORY) {
-        struct simpfs_entry entries[((directory.length - 1) * SECTOR_SIZE + directory.last_sector_bytes_used) / sizeof(struct simpfs_entry)];
+        struct simpfs_entry entries[simpfs_get_entry_size(&directory) / sizeof(struct simpfs_entry)];
         uint32_t length = simpfs_get_entries(&directory, entries);
 
         if (flag_line) {

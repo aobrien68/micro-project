@@ -31,6 +31,7 @@ struct __attribute__((packed)) simpfs_entry {
 
 bool mount_device(char* path);
 void unmount_device();
+uint64_t simpfs_get_entry_size(struct simpfs_entry* entry);
 bool simpfs_format(uint64_t sectors_per_volume);
 bool simpfs_mount();
 void simpfs_unmount();
