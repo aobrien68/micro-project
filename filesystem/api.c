@@ -399,7 +399,7 @@ bool simpfs_bitmap_set(int8_t descriptor, uint32_t start, bool value, uint32_t l
     }
     simpfs_seek(descriptor, start_byte);
     simpfs_write(descriptor, 1, &byte);
-    length -= 8 - start_offset;
+    length -= stop - start_offset;
     if (!length) {
         return true;
     }
@@ -467,5 +467,23 @@ uint32_t simpfs_allocate(uint32_t sectors) {
 }
 
 void test() {
-    printf("%d\n", simpfs_allocate(21));
+    uint32_t start_lba = simpfs_allocate(1);
+    struct simpfs_entry entry = new_simpfs_entry("home", SFS_IS_DIRECTORY | SFS_IS_USER_READABLE, start_lba, 1, 3 * sizeof(struct simpfs_entry));
+    simpfs_add_entry(&fs_info.root_directory, &entry);
+    
+    struct simpfs_entry entry_buffer = entry;
+    memset(entry_buffer.name, 0, NAME_SIZE);
+    entry_buffer.name[0] = '.';
+    simpfs_add_entry(&entry, &entry_buffer);
+    entry_buffer = fs_info.root_directory;
+    memset(entry_buffer.name, 0, NAME_SIZE);
+    entry_buffer.name[0] = '.';
+    entry_buffer.name[1] = '.';
+    simpfs_add_entry(&entry, &entry_buffer);
+    entry_buffer = new_simpfs_entry("data.txt", SFS_IS_USER_READABLE | SFS_IS_USER_WRITABLE, start_lba + 1, 1, 10);
+    simpfs_add_entry(&entry, &entry_buffer);
+
+    fs_info.root_directory.modified_date = time(NULL);
+    fs_info.root_directory.last_sector_bytes_used += sizeof(struct simpfs_entry);
+    simpfs_update_entry_recursive(&sector_zero_entry, &fs_info.root_directory, &fs_info.root_directory);
 }
