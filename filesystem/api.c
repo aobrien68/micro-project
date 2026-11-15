@@ -430,71 +430,42 @@ bool simpfs_bitmap_set(int8_t descriptor, uint32_t start, bool value, uint32_t l
 }
 
 // 0 = failed
-// uint32_t simpfs_allocate(uint32_t sectors) {
-//     int8_t fd = simpfs_open(&fs_info.bitmap);
-//     uint8_t byte;
-//     uint64_t current = 0;
-//     bool in_sequence = false;
-//     uint32_t sequence_start = 0;
-//     while (simpfs_fread(fd, 1, &byte)) {
-//         for (uint8_t i=0; i<8; i++) {
-//             bool bit = byte & (1 << i);
-//             if (!in_sequence && !bit) {
-//                 in_sequence = true;
-//             } else if (in_sequence && bit) {
-//                 in_sequence = false;
-//             }
+uint32_t simpfs_allocate(uint32_t sectors) {
+    int8_t fd = simpfs_open(&fs_info.bitmap);
+    uint8_t byte;
+    uint64_t current = 0;
+    bool in_sequence = false;
+    bool double_break = false;
+    uint32_t sequence_start = 0;
+    while (simpfs_fread(fd, 1, &byte) && !double_break) {
+        for (uint8_t i=0; i<8; i++) {
+            bool bit = byte & (1 << i);
+            if (!in_sequence && !bit) {
+                sequence_start = current;
+                in_sequence = true;
+            } else if (in_sequence && bit) {
+                in_sequence = false;
+                printf("End at %lu Start at %u\n", current, sequence_start);
+            }
 
-//             current++;
-//             if (in_sequence && (current - sequence_start) == sectors) {
-//                 break;
-//             }
-//         }
-//     }
+            current++;
+            if (in_sequence && (current - sequence_start) == sectors) {
+                double_break = true;
+                break;
+            }
+        }
+    }
 
-//     if (!sequence_start) {
-//         simpfs_close(fd);
-//         return 0;
-//     }
+    if (!sequence_start) {
+        simpfs_close(fd);
+        return 0;
+    }
 
-//     uint64_t sequence_stop = current;
-//     current = sequence_start;
-//     uint32_t sequence_start_byte_index = sequence_start / 8;
-//     simpfs_seek(fd, sequence_start_byte_index);
-//     simpfs_fread(fd, 1, &byte);
-//     simpfs_seek(fd, sequence_start_byte_index);
-//     uint8_t i = sequence_start % 8;
-//     uint8_t stop = min(8, i + sectors);
-//     for (i; i<stop; i++) {
-//         byte |= (1 << i);
-//         current++;
-//     }
-//     simpfs_write(fd, 1, &byte);
-//     if (current == sequence_stop) {
-//         simpfs_close(fd);
-//         return sequence_start;
-//     }
-
-//     uint32_t num_full_bytes = (sequence_start - current) / 8;
-//     uint8_t buffer[num_full_bytes];
-//     memset(buffer, 0xFF, num_full_bytes);
-//     simpfs_write(fd, num_full_bytes, buffer);
-//     current += 8 * num_full_bytes;
-//     if (current == sequence_stop) {
-//         simpfs_close(fd);
-//         return sequence_start;
-//     }
-
-//     simpfs_read(fd, 1, &byte);
-//     simpfs_seek(fd, sequence_start_byte_index + 1 + num_full_bytes)
-//     for (i; i<stop; i++) {
-//         byte |= (1 << i);
-//         current++;
-//     }
-// }
+    simpfs_bitmap_set(fd, sequence_start, true, sectors);
+    simpfs_close(fd);
+    return sequence_start;
+}
 
 void test() {
-    int8_t fd = simpfs_open(&fs_info.bitmap);
-    simpfs_bitmap_set(fd, 3, 0, 20);
-    simpfs_close(fd);
+    printf("%d\n", simpfs_allocate(21));
 }
