@@ -156,7 +156,10 @@ int main(int argc, char* argv[]) {
         return 2;
     }
 
-    simpfs_mount();
+    if (!simpfs_mount()) {
+        printf("simpfs: cannot mount filesystem\n");
+        return 3;
+    }
 
     char input_buffer[MAX_INPUT_SIZE + 1];
     bool time_to_exit = false;
@@ -217,8 +220,12 @@ int main(int argc, char* argv[]) {
                     printf("format: usage format <number of sectors>\n");
                     break;
                 }
-                if (num_sectors < 3 || num_sectors > 0x100000000) {
-                    printf("format: <number of sector> needs to be in range 2 < n <= 2^32\n");
+                if (num_sectors < 8 || num_sectors > 0x100000000) {
+                    printf("format: <number of sector> needs to be in range 8 < n <= 2^32\n");
+                    break;
+                }
+                if (num_sectors % 8) {
+                    printf("format: <number of sector> needs to be divisible by 8\n");
                     break;
                 }
                 simpfs_format(num_sectors);
@@ -234,5 +241,6 @@ int main(int argc, char* argv[]) {
         free(simpfs_argv);
     }
 
+    simpfs_unmount();
     unmount_device();
 }

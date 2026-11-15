@@ -14,6 +14,7 @@ struct __attribute__((packed)) simpfs_info {
 struct simpfs_file {
     bool is_open;
     uint16_t position;
+    uint16_t last_sector_bytes_used;
     uint32_t start_lba;
     uint32_t length;
     uint32_t current_sector_offset;
@@ -25,7 +26,6 @@ struct simpfs_file {
 FILE* disk = NULL;
 struct simpfs_entry sector_zero_entry;
 struct simpfs_info fs_info;
-uint8_t* bitmap;
 struct simpfs_file files[MAX_FILE_DESCRIPTORS];
 
 
@@ -62,7 +62,7 @@ uint64_t simpfs_get_entry_size(struct simpfs_entry* entry) {
 bool simpfs_format(uint64_t sectors_per_volume) {
     uint32_t bitmap_length = (sectors_per_volume + (SECTOR_SIZE * 8) - 1) / (SECTOR_SIZE * 8);
 
-    uint16_t last_sector_bytes_used = sectors_per_volume % SECTOR_SIZE;
+    uint16_t last_sector_bytes_used = (sectors_per_volume % (SECTOR_SIZE * 8)) / 8;
     if (!last_sector_bytes_used) {
         last_sector_bytes_used = SECTOR_SIZE;
     }
@@ -141,14 +141,15 @@ bool simpfs_mount() {
     memcpy(&fs_info, buffer, sizeof(struct simpfs_info));
     sector_zero_entry = new_simpfs_entry("sector_zero", SFS_IS_DIRECTORY | SFS_IS_TOP_LEVEL, 0, 1, 2 * sizeof(struct simpfs_entry));
 
-    // bitmap = malloc(fs_info.bitmap_length * SECTOR_SIZE);
-    // if (!bitmap) {
-    //     return false;
-    // }
+    for (int8_t i=0; i<MAX_FILE_DESCRIPTORS; i++) {
+        files[i].is_open = false;
+    }
+
+    return true;
 }
 
 void simpfs_unmount() {
-    //free(bitmap);
+    
 }
 
 int8_t simpfs_open(struct simpfs_entry* entry) {
@@ -158,6 +159,7 @@ int8_t simpfs_open(struct simpfs_entry* entry) {
 
             disk_read(disk, entry->start_lba, files[i].buffer);
             files[i].position = 0;
+            files[i].last_sector_bytes_used = entry->last_sector_bytes_used;
             files[i].start_lba = entry->start_lba;
             files[i].length = entry->length;
             files[i].current_sector_offset = 0;
@@ -207,6 +209,7 @@ uint32_t simpfs_read(int8_t descriptor, uint32_t n, uint8_t* buffer) {
         if (file->position == SECTOR_SIZE) {
             file->current_sector_offset++;
             if (file->current_sector_offset == file->length) {
+                file->current_sector_offset--;
                 break;
             }
             file->position = 0;
@@ -246,6 +249,20 @@ uint32_t simpfs_write(int8_t descriptor, uint32_t n, uint8_t* buffer) {
     }
 
     return index;
+}
+
+uint32_t simpfs_fread(int8_t descriptor, uint32_t n, uint8_t* buffer) {
+    uint64_t new_seek = simpfs_get_seek(descriptor);
+    uint64_t max_seek = (files[descriptor].length - 1) * SECTOR_SIZE + files[descriptor].last_sector_bytes_used;
+    if (new_seek == max_seek) {
+        return 0;
+    }
+    new_seek += n;
+    if (new_seek > max_seek) {
+        uint32_t max_n = new_seek - max_seek;
+        return simpfs_read(descriptor, min(n, max_n), buffer);
+    }
+    return simpfs_read(descriptor, n, buffer);
 }
 
 struct simpfs_entry simpfs_get_entry(struct simpfs_entry* directory, char* entry_name) {
@@ -363,9 +380,21 @@ bool simpfs_add_entry(struct simpfs_entry* directory, struct simpfs_entry* entry
     return result;
 }
 
+uint32_t simpfs_allocate(uint32_t sectors) {
+    int8_t fd = simpfs_open(&fs_info.bitmap);
+
+
+    simpfs_close(fd);
+}
+
 void test() {
-    struct simpfs_entry new_root = fs_info.root_directory;
-    new_root.accesed_date = time(NULL);
-    new_root.last_sector_bytes_used = 4 * sizeof(struct simpfs_entry);
-    simpfs_update_entry_recursive(&sector_zero_entry, &fs_info.root_directory, &new_root);
+    int8_t fd = simpfs_open(&fs_info.bitmap);
+    uint8_t test_byte;
+    printf("1=%u\n", simpfs_fread(fd, 1, &test_byte));
+    printf("7=%x\n", test_byte);
+    uint8_t buffer[256];
+    printf("254=%u\n", simpfs_fread(fd, 254, buffer));
+    printf("1=%u\n", simpfs_fread(fd, 2, buffer));
+    printf("0=%u\n", simpfs_fread(fd, 1, buffer));
+    simpfs_close(fd);
 }
