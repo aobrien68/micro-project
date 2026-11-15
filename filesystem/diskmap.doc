@@ -17,7 +17,7 @@ Sectors b+1 to a: Data (Start with Root Directory)
 
 
 [0, 29] Name
-[29, 1] Flags: 0x1 = Directory, 0x02 = Executable, 0x04 = Read Only, 0x08 = User Readable, 0x10 = User Writable (Overrided by Read Only)
+[29, 1] Flags: 0x01 = Valid Entry, 0x02 = Directory, 0x04 = Executable, 0x08 = Device, 0x10 = Read Only, 0x20 = Top Level, 0x40 = User Readable, 0x80 = User Writable (Overrided by Read Only)
 [30, 2] Last Sector Bytes Used 
 [32, 4] Start LBA
 [36, 4] Length in Sectors

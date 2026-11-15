@@ -52,7 +52,7 @@ char** get_args(int* argc, char* buffer) {
     return argv;
 }
 
-char* flag_code_str = "dxrtrw";
+char* flag_code_str = "dxdrtrw";
 
 char* ls_line(struct simpfs_entry entry, bool is_human_readable) {
     char flags[8];
@@ -65,7 +65,7 @@ char* ls_line(struct simpfs_entry entry, bool is_human_readable) {
     }
     flags[7] = '\0';
 
-    uint64_t bytes = (entry.length - 1) * SECTOR_SIZE + entry.last_sector_bytes_used;
+    uint64_t bytes = simpfs_get_entry_size(&entry);
 
     char* time = ctime(&entry.modified_date);
     uint8_t time_length = strlen(time) - 1;

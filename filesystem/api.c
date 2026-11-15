@@ -23,6 +23,7 @@ struct simpfs_file {
 
 
 FILE* disk = NULL;
+struct simpfs_entry sector_zero_entry;
 struct simpfs_info fs_info;
 uint8_t* bitmap;
 struct simpfs_file files[MAX_FILE_DESCRIPTORS];
@@ -138,6 +139,7 @@ bool simpfs_mount() {
     uint8_t buffer[SECTOR_SIZE];
     disk_read(disk, 0, buffer);
     memcpy(&fs_info, buffer, sizeof(struct simpfs_info));
+    sector_zero_entry = new_simpfs_entry("sector_zero", SFS_IS_DIRECTORY | SFS_IS_TOP_LEVEL, 0, 1, 2 * sizeof(struct simpfs_entry));
 
     // bitmap = malloc(fs_info.bitmap_length * SECTOR_SIZE);
     // if (!bitmap) {
@@ -302,6 +304,46 @@ struct simpfs_entry simpfs_get_entry_recursive(char* path) {
     return simpfs_get_entry(&current_entry, path);
 }
 
+bool simpfs_update_entry(struct simpfs_entry* directory, struct simpfs_entry* old_entry, struct simpfs_entry* new_entry) {
+    int8_t fd = simpfs_open(directory);
+    uint64_t size = simpfs_get_entry_size(directory);
+    for (uint64_t seek = 0; seek < size; seek += sizeof(struct simpfs_entry)) {
+        struct simpfs_entry read_entry;
+        simpfs_read(fd, sizeof(struct simpfs_entry), (uint8_t*)&read_entry);
+        if (!memcmp(old_entry->name, read_entry.name, NAME_SIZE)) {
+            simpfs_seek(fd, seek);
+            simpfs_write(fd, sizeof(struct simpfs_entry), (uint8_t*)new_entry);
+            simpfs_close(fd);
+            return true;
+        }
+    }
+    simpfs_close(fd);
+    return false;
+}
+
+// TODO support root maybe
+bool simpfs_update_entry_recursive(struct simpfs_entry* directory, struct simpfs_entry* old_entry, struct simpfs_entry* new_entry) {
+    simpfs_update_entry(directory, old_entry, new_entry);
+
+    memset(new_entry->name, 0, NAME_SIZE);
+    new_entry->name[0] = '.';
+    memset(old_entry->name, 0, NAME_SIZE);
+    old_entry->name[0] = '.';
+    simpfs_update_entry(old_entry, old_entry, new_entry);
+
+    struct simpfs_entry entries[simpfs_get_entry_size(old_entry) / sizeof(struct simpfs_entry)];
+    uint32_t num_entries = simpfs_get_entries(old_entry, entries);
+    new_entry->name[1] = '.';
+    old_entry->name[1] = '.';
+    for (uint32_t i=2; i<num_entries; i++) {
+        if (entries[i].flags & SFS_IS_DIRECTORY) {
+            simpfs_update_entry(&entries[i], old_entry, new_entry);
+        }
+    }
+
+    return true;
+}
+
 // TODO fix adding entry needing to resize
 bool simpfs_add_entry(struct simpfs_entry* directory, struct simpfs_entry* entry) {
     int8_t fd = simpfs_open(directory);
@@ -310,26 +352,20 @@ bool simpfs_add_entry(struct simpfs_entry* directory, struct simpfs_entry* entry
         struct simpfs_entry read_entry;
         simpfs_read(fd, sizeof(struct simpfs_entry), (uint8_t*)&read_entry);
         if (!(read_entry.flags & SFS_IS_VALID)) {
-            simpfs_seek(fd, seek - sizeof(struct simpfs_entry));
+            simpfs_seek(fd, seek);
             bool result = simpfs_write(fd, sizeof(struct simpfs_entry), (uint8_t*)entry) != 0;
             simpfs_close(fd);
             return result;
         }
     }
-    puts(entry->name);
     bool result = simpfs_write(fd, sizeof(struct simpfs_entry), (uint8_t*)entry) != 0;
     simpfs_close(fd);
     return result;
 }
 
 void test() {
-    struct simpfs_entry entry = new_simpfs_entry("home", SFS_IS_DIRECTORY | SFS_IS_USER_READABLE, 3, 1, 192);
-    for (int i=0; i<4; i++) {
-        for (int j=0; j<16; j++) {
-            printf("%x ", (((uint8_t*)&entry)[i * 16 + 4]));
-        }
-        printf("\n");
-    }
-    struct simpfs_entry directory = simpfs_get_entry_recursive("/");
-    simpfs_add_entry(&directory, &entry);
+    struct simpfs_entry new_root = fs_info.root_directory;
+    new_root.accesed_date = time(NULL);
+    new_root.last_sector_bytes_used = 4 * sizeof(struct simpfs_entry);
+    simpfs_update_entry_recursive(&sector_zero_entry, &fs_info.root_directory, &new_root);
 }
