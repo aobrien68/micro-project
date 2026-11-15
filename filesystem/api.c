@@ -5,6 +5,7 @@
 
 #define MAX_FILE_DESCRIPTORS (16)
 #define min(a,b) (a<b ? a : b)
+// #define max(c,d) (c>d ? c : d)
 
 struct __attribute__((packed)) simpfs_info {
     struct simpfs_entry bitmap;
@@ -380,21 +381,120 @@ bool simpfs_add_entry(struct simpfs_entry* directory, struct simpfs_entry* entry
     return result;
 }
 
-uint32_t simpfs_allocate(uint32_t sectors) {
-    int8_t fd = simpfs_open(&fs_info.bitmap);
+bool simpfs_bitmap_set(int8_t descriptor, uint32_t start, bool value, uint32_t length) {
+    uint32_t start_byte = start / 8;
+    simpfs_seek(descriptor, start_byte);
+    uint8_t start_offset = start % 8;
+    uint8_t byte;
+    simpfs_read(descriptor, 1, &byte);
+    uint8_t stop = min(8, start_offset + length);
+    if (value) {
+        for (uint8_t i=start_offset; i<stop; i++) {
+            byte |= (1 << i);
+        }
+    } else {
+        for (uint8_t i=start_offset; i<stop; i++) {
+            byte &= ~(1 << i);
+        }
+    }
+    simpfs_seek(descriptor, start_byte);
+    simpfs_write(descriptor, 1, &byte);
+    length -= 8 - start_offset;
+    if (!length) {
+        return true;
+    }
 
+    uint32_t num_full_bytes = length / 8;
+    byte = value ? 0xFF : 0;
+    for (uint32_t i=0; i<num_full_bytes; i++) {
+        simpfs_write(descriptor, 1, &byte);
+    }
+    length -= 8 * num_full_bytes;
+    if (!length) {
+        return true;
+    }
 
-    simpfs_close(fd);
+    simpfs_read(descriptor, 1, &byte);
+    if (value) {
+        for (uint8_t i=0; i<length; i++) {
+            byte |= (1 << i);
+        }
+    } else {
+        for (uint8_t i=0; i<length; i++) {
+            byte &= ~(1 << i);
+        }
+    }
+    simpfs_seek(descriptor, start_byte + 1 + num_full_bytes);
+    simpfs_write(descriptor, 1, &byte);
+    return true;
 }
+
+// 0 = failed
+// uint32_t simpfs_allocate(uint32_t sectors) {
+//     int8_t fd = simpfs_open(&fs_info.bitmap);
+//     uint8_t byte;
+//     uint64_t current = 0;
+//     bool in_sequence = false;
+//     uint32_t sequence_start = 0;
+//     while (simpfs_fread(fd, 1, &byte)) {
+//         for (uint8_t i=0; i<8; i++) {
+//             bool bit = byte & (1 << i);
+//             if (!in_sequence && !bit) {
+//                 in_sequence = true;
+//             } else if (in_sequence && bit) {
+//                 in_sequence = false;
+//             }
+
+//             current++;
+//             if (in_sequence && (current - sequence_start) == sectors) {
+//                 break;
+//             }
+//         }
+//     }
+
+//     if (!sequence_start) {
+//         simpfs_close(fd);
+//         return 0;
+//     }
+
+//     uint64_t sequence_stop = current;
+//     current = sequence_start;
+//     uint32_t sequence_start_byte_index = sequence_start / 8;
+//     simpfs_seek(fd, sequence_start_byte_index);
+//     simpfs_fread(fd, 1, &byte);
+//     simpfs_seek(fd, sequence_start_byte_index);
+//     uint8_t i = sequence_start % 8;
+//     uint8_t stop = min(8, i + sectors);
+//     for (i; i<stop; i++) {
+//         byte |= (1 << i);
+//         current++;
+//     }
+//     simpfs_write(fd, 1, &byte);
+//     if (current == sequence_stop) {
+//         simpfs_close(fd);
+//         return sequence_start;
+//     }
+
+//     uint32_t num_full_bytes = (sequence_start - current) / 8;
+//     uint8_t buffer[num_full_bytes];
+//     memset(buffer, 0xFF, num_full_bytes);
+//     simpfs_write(fd, num_full_bytes, buffer);
+//     current += 8 * num_full_bytes;
+//     if (current == sequence_stop) {
+//         simpfs_close(fd);
+//         return sequence_start;
+//     }
+
+//     simpfs_read(fd, 1, &byte);
+//     simpfs_seek(fd, sequence_start_byte_index + 1 + num_full_bytes)
+//     for (i; i<stop; i++) {
+//         byte |= (1 << i);
+//         current++;
+//     }
+// }
 
 void test() {
     int8_t fd = simpfs_open(&fs_info.bitmap);
-    uint8_t test_byte;
-    printf("1=%u\n", simpfs_fread(fd, 1, &test_byte));
-    printf("7=%x\n", test_byte);
-    uint8_t buffer[256];
-    printf("254=%u\n", simpfs_fread(fd, 254, buffer));
-    printf("1=%u\n", simpfs_fread(fd, 2, buffer));
-    printf("0=%u\n", simpfs_fread(fd, 1, buffer));
+    simpfs_bitmap_set(fd, 3, 0, 20);
     simpfs_close(fd);
 }
