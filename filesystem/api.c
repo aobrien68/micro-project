@@ -304,6 +304,10 @@ struct simpfs_entry simpfs_get_entry_recursive(char* path) {
     }
     
     struct simpfs_entry current_entry = fs_info.root_directory;
+    if (!*path) {
+        return current_entry;
+    }
+
     char buffer[NAME_SIZE + 1];
     char* slash = strchr(path, '/');
     while (slash) {
@@ -341,6 +345,9 @@ bool simpfs_update_entry(struct simpfs_entry* directory, struct simpfs_entry* ol
 
 // TODO support root maybe
 bool simpfs_update_entry_recursive(struct simpfs_entry* directory, struct simpfs_entry* old_entry, struct simpfs_entry* new_entry) {
+    if (old_entry->flags & SFS_IS_TOP_LEVEL) {
+        fs_info.root_directory = *new_entry;
+    }
     simpfs_update_entry(directory, old_entry, new_entry);
 
     memset(new_entry->name, 0, NAME_SIZE);
@@ -484,6 +491,28 @@ bool simpfs_create_file(struct simpfs_entry* directory, char* name, uint8_t flag
     return true;
 }
 
+struct simpfs_entry simpfs_get_directory_and_name_from_path(char* path) {
+    char* name;
+    char* pointer = path;
+    while (*pointer) {
+        if (*pointer == '/') {
+            name = pointer;
+        }
+        pointer++;
+    }
+    *name = '\0';
+    name++;
+    struct simpfs_entry directory = simpfs_get_entry_recursive(path);
+    strcpy(path, "test.txt");
+    return directory;
+}
+
+bool simpfs_create_file_from_path(char* path, uint8_t flags) {
+    struct simpfs_entry directory = simpfs_get_directory_and_name_from_path(path);
+    return simpfs_create_file(&directory, path, flags);
+}
+
 void test() {
-    simpfs_create_file(&fs_info.root_directory, "test.txt", SFS_IS_USER_READABLE | SFS_IS_USER_WRITABLE);
+    char path[10] = "/test.txt";
+    simpfs_create_file_from_path(path, SFS_IS_USER_READABLE | SFS_IS_USER_WRITABLE);
 }

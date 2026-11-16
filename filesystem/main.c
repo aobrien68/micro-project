@@ -145,6 +145,10 @@ void get_ls_flags(char* str, bool* flag_all, bool* flag_line, bool* flag_human_r
     }
 }
 
+void touch(char* path) {
+    
+}
+
 int main(int argc, char* argv[]) {
     if (argc < 2) {
         printf("simpfs: missing operand\n");
