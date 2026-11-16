@@ -466,24 +466,24 @@ uint32_t simpfs_allocate(uint32_t sectors) {
     return sequence_start;
 }
 
-void test() {
+bool simpfs_create_file(struct simpfs_entry* directory, char* name, uint8_t flags) {
     uint32_t start_lba = simpfs_allocate(1);
-    struct simpfs_entry entry = new_simpfs_entry("home", SFS_IS_DIRECTORY | SFS_IS_USER_READABLE, start_lba, 1, 3 * sizeof(struct simpfs_entry));
-    simpfs_add_entry(&fs_info.root_directory, &entry);
-    
-    struct simpfs_entry entry_buffer = entry;
-    memset(entry_buffer.name, 0, NAME_SIZE);
-    entry_buffer.name[0] = '.';
-    simpfs_add_entry(&entry, &entry_buffer);
-    entry_buffer = fs_info.root_directory;
-    memset(entry_buffer.name, 0, NAME_SIZE);
-    entry_buffer.name[0] = '.';
-    entry_buffer.name[1] = '.';
-    simpfs_add_entry(&entry, &entry_buffer);
-    entry_buffer = new_simpfs_entry("data.txt", SFS_IS_USER_READABLE | SFS_IS_USER_WRITABLE, start_lba + 1, 1, 10);
-    simpfs_add_entry(&entry, &entry_buffer);
+    if (!start_lba) {
+        return false;
+    }
 
-    fs_info.root_directory.modified_date = time(NULL);
-    fs_info.root_directory.last_sector_bytes_used += sizeof(struct simpfs_entry);
-    simpfs_update_entry_recursive(&sector_zero_entry, &fs_info.root_directory, &fs_info.root_directory);
+    struct simpfs_entry entry = new_simpfs_entry(name, flags, start_lba, 1, 0);
+    if (!simpfs_add_entry(directory, &entry)) {
+        return false;
+    }
+
+    directory->modified_date = time(NULL);
+    directory->last_sector_bytes_used += sizeof(struct simpfs_entry);
+    simpfs_update_entry_recursive(&sector_zero_entry, directory, directory);
+
+    return true;
+}
+
+void test() {
+    simpfs_create_file(&fs_info.root_directory, "test.txt", SFS_IS_USER_READABLE | SFS_IS_USER_WRITABLE);
 }
