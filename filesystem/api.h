@@ -37,5 +37,6 @@ bool simpfs_mount();
 void simpfs_unmount();
 uint32_t simpfs_get_entries(struct simpfs_entry* directory, struct simpfs_entry* entries);
 struct simpfs_entry simpfs_get_entry_recursive(char* path);
+bool simpfs_create_file_from_path(char* path, uint8_t flags);
 
 void test();

@@ -503,7 +503,9 @@ struct simpfs_entry simpfs_get_directory_and_name_from_path(char* path) {
     *name = '\0';
     name++;
     struct simpfs_entry directory = simpfs_get_entry_recursive(path);
-    strcpy(path, "test.txt");
+    char name_buffer[NAME_SIZE];
+    strncpy(name_buffer, name, NAME_SIZE);
+    strcpy(path, name_buffer);
     return directory;
 }
 

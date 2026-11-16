@@ -110,7 +110,9 @@ void ls(char* path, bool flag_all, bool flag_line, bool flag_human_readable) {
                     printf("%s ", name);
                 }
             }
-            putchar('\n');
+            if (length > 2 || flag_all) {
+                putchar('\n');
+            }
         }
     } else {
         if (flag_line) {
@@ -145,8 +147,14 @@ void get_ls_flags(char* str, bool* flag_all, bool* flag_line, bool* flag_human_r
     }
 }
 
+// TODO implement touch functionality
 void touch(char* path) {
-    
+    struct simpfs_entry entry = simpfs_get_entry_recursive(path);
+    if (entry.flags & SFS_IS_VALID) {
+        printf("touch: %s already exists (date modification not implemented)\n", path);
+        return;
+    }
+    simpfs_create_file_from_path(path, SFS_IS_USER_READABLE | SFS_IS_USER_WRITABLE);
 }
 
 int main(int argc, char* argv[]) {
@@ -211,6 +219,15 @@ int main(int argc, char* argv[]) {
                 time_to_exit = true;
             } else if (!strcmp(simpfs_argv[0], "test")) {
                 test();
+            }
+            break;
+        case 5:
+            if (!strcmp(simpfs_argv[0], "touch")) {
+                if (simpfs_argc != 2) {
+                    printf("touch: usage touch <filename>\n");
+                    break;
+                }
+                touch(simpfs_argv[1]);
             }
             break;
         case 6:
