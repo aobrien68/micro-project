@@ -473,6 +473,7 @@ uint32_t simpfs_allocate(uint32_t sectors) {
     return sequence_start;
 }
 
+// TODO fix hard codes update for this a remove
 bool simpfs_create_file(struct simpfs_entry* directory, char* name, uint8_t flags) {
     uint32_t start_lba = simpfs_allocate(1);
     if (!start_lba) {
@@ -514,7 +515,50 @@ bool simpfs_create_file_from_path(char* path, uint8_t flags) {
     return simpfs_create_file(&directory, path, flags);
 }
 
+bool simpfs_remove_file(struct simpfs_entry* directory, char* filename) {
+    // Maybe this error checking is overkill
+    if (!*filename) {
+        return false;
+    }
+    if (*filename == '.' && (!filename[1] || filename[1] == '.')) {
+        return false;
+    }
+    
+    struct simpfs_entry entry = simpfs_get_entry(directory, filename);
+    if (!(entry.flags & SFS_IS_VALID)) {
+        return false;
+    }
+
+    int8_t fd = simpfs_open(&fs_info.bitmap);
+    if (fd < 0) {
+        return false;
+    }
+    simpfs_bitmap_set(fd, entry.start_lba, false, entry.length);
+    simpfs_close(fd);
+
+    fd = simpfs_open(directory);
+    if (fd < 0) {
+        return false;
+    }
+    
+    uint64_t size = simpfs_get_entry_size(directory);
+    for (uint64_t seek=0; seek<size; seek+=sizeof(struct simpfs_entry)) {
+        simpfs_read(fd, sizeof(struct simpfs_entry), (uint8_t*)&entry);
+        if (!strncmp(entry.name, filename, NAME_SIZE)) {
+            simpfs_seek(fd, seek);
+            memset(&entry, 0, sizeof(struct simpfs_entry));
+            simpfs_write(fd, sizeof(struct simpfs_entry), (uint8_t*)&entry);
+            if (seek == size - sizeof(struct simpfs_entry)) {
+                directory->modified_date = time(NULL);
+                directory->last_sector_bytes_used += sizeof(struct simpfs_entry);
+                simpfs_update_entry_recursive(&sector_zero_entry, directory, directory);
+            }
+            return true;
+        }
+    }
+    return false; // should never happen
+}
+
 void test() {
-    char path[10] = "/test.txt";
-    simpfs_create_file_from_path(path, SFS_IS_USER_READABLE | SFS_IS_USER_WRITABLE);
+    simpfs_remove_file(&fs_info.root_directory, "potato");
 }
